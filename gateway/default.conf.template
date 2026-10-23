@@ -1,0 +1,84 @@
+# Rendered by the nginx image's envsubst step; only ${GITHUB_USER} is substituted.
+#
+# The upstream apps run with the owner's token, so they can see private repos.
+# Only the aggregate cards are routed; endpoints that render a single repo or
+# raw data (/api/pin, /api/gist, /api/wakatime, /data) are never reachable.
+
+proxy_cache_path /var/cache/nginx/cards levels=1:2 keys_zone=cards:10m
+                 max_size=200m inactive=7d use_temp_path=off;
+
+# Real client IP from Traefik / Cloudflare, so the rate limit is per visitor.
+set_real_ip_from 10.0.0.0/8;
+set_real_ip_from 172.16.0.0/12;
+set_real_ip_from 192.168.0.0/16;
+real_ip_header X-Forwarded-For;
+real_ip_recursive on;
+
+# Cache misses spend GitHub API quota; cap how fast one client can cause them.
+limit_req_zone $binary_remote_addr zone=perip:10m rate=5r/s;
+
+# Usernames are case-insensitive on GitHub.
+map $arg_username $username_ok {
+    "~*^${GITHUB_USER}$" 1;
+    default 0;
+}
+map $arg_user $user_ok {
+    "~*^${GITHUB_USER}$" 1;
+    default 0;
+}
+
+server {
+    listen 80 default_server;
+    server_name _;
+    server_tokens off;
+
+    limit_req zone=perip burst=40 nodelay;
+    limit_req_status 429;
+
+    proxy_cache cards;
+    proxy_cache_key "$uri$is_args$args";
+    proxy_cache_valid 200 1h;
+    proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+    proxy_cache_background_update on;
+    proxy_cache_lock on;
+    # The apps send their own lifetimes (the activity graph sends no-store);
+    # the gateway decides instead.
+    proxy_ignore_headers Cache-Control Expires Set-Cookie;
+    proxy_hide_header Cache-Control;
+    proxy_hide_header Expires;
+    proxy_hide_header Set-Cookie;
+    add_header Cache-Control "public, max-age=3600";
+    add_header X-Cache $upstream_cache_status;
+    add_header X-Content-Type-Options nosniff;
+
+    location = /api {
+        if ($username_ok = 0) { return 403; }
+        proxy_pass http://readme-stats:9000;
+    }
+
+    location = /api/top-langs {
+        if ($username_ok = 0) { return 403; }
+        proxy_pass http://readme-stats:9000;
+    }
+
+    location = /streak {
+        if ($user_ok = 0) { return 403; }
+        rewrite ^ / break;
+        proxy_pass http://streak:80;
+    }
+
+    location = /graph {
+        if ($username_ok = 0) { return 403; }
+        proxy_pass http://activity-graph:5100;
+    }
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        return 404;
+    }
+}

@@ -1,0 +1,59 @@
+# Self-hosted GitHub profile cards for one user, using that user's own token so
+# private contributions are counted. Only the gateway is exposed (Dokploy domain
+# -> gateway:80); it allows just the card endpoints and just GITHUB_USER.
+
+services:
+  gateway:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    depends_on:
+      - readme-stats
+      - streak
+      - activity-graph
+    environment:
+      GITHUB_USER: ${GITHUB_USER:?set GITHUB_USER}
+      TZ: ${TZ:-Asia/Dhaka}
+    volumes:
+      - ./gateway/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - gateway-cache:/var/cache/nginx
+    expose:
+      - "80"
+
+  # anuraghazra/github-readme-stats: stats card + top languages
+  readme-stats:
+    build: ./readme-stats
+    restart: unless-stopped
+    environment:
+      PAT_1: ${GITHUB_TOKEN:?set GITHUB_TOKEN}
+      WHITELIST: ${GITHUB_USER}
+      PORT: "9000"
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Dhaka}
+    expose:
+      - "9000"
+
+  # DenverCoder1/github-readme-streak-stats: built from its own Dockerfile
+  streak:
+    build:
+      context: https://github.com/DenverCoder1/github-readme-streak-stats.git#ae11d329c3320706e9b9b88aeb143a627ecd7d0c
+    restart: unless-stopped
+    environment:
+      TOKEN: ${GITHUB_TOKEN}
+      WHITELIST: ${GITHUB_USER}
+      TZ: ${TZ:-Asia/Dhaka}
+    expose:
+      - "80"
+
+  # Ashutosh00710/github-readme-activity-graph: contribution line graph
+  activity-graph:
+    build: ./activity-graph
+    restart: unless-stopped
+    environment:
+      TOKEN: ${GITHUB_TOKEN}
+      PORT: "5100"
+      TZ: ${TZ:-Asia/Dhaka}
+    expose:
+      - "5100"
+
+volumes:
+  gateway-cache:
