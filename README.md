@@ -43,7 +43,7 @@ The upstream apps return their error cards as `200`, so a bad token gets cached 
 
 Create a **classic** personal access token as the profile owner with scopes `repo` and `read:user`, no expiry or a long one. A token from another account only sees public data.
 
-For private contributions to count on the streak and graph, the profile setting **Include private contributions on my profile** is not required, because the token owner always sees their own.
+The streak and graph read the contribution calendar, so they match what your profile shows. With **Include private contributions on my profile** turned on (as it is for FuSan21), the public instances already counted private contributions there. The stats and top-languages cards are the ones that gain from the token: private commits, PRs, issues and repository languages.
 
 ## Deploy on Dokploy
 
