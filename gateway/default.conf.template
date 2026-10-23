@@ -72,6 +72,21 @@ server {
         proxy_pass http://activity-graph:5100;
     }
 
+    location = /oss {
+        if ($username_ok = 0) { return 403; }
+        proxy_pass http://extras:7000;
+    }
+
+    # Every hit must reach the counter, and camo must refetch on every view.
+    # add_header here replaces the server-level ones, so nosniff is repeated.
+    location = /views {
+        if ($username_ok = 0) { return 403; }
+        proxy_cache off;
+        proxy_pass http://extras:7000;
+        add_header Cache-Control "max-age=0, no-cache, no-store, must-revalidate" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
     location = /healthz {
         access_log off;
         default_type text/plain;

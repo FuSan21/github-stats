@@ -20,13 +20,34 @@ Everything goes through the `gateway` (nginx). Query parameters are the upstream
 | `/api/top-langs` | top languages | `username` |
 | `/streak` | streak card | `user` |
 | `/graph` | activity graph | `username` |
+| `/oss` | third-party PRs card (`extras`) | `username` |
+| `/views` | profile view counter (`extras`) | `username` |
 | `/healthz` | gateway health | none |
+
+### `/oss`: open source contributions
+
+Lists your pull requests to other people's public repositories, newest first, refreshed from the GitHub API at most every 15 minutes (plus the gateway's 1 hour cache). A repository counts as third-party when it's public, not owned by you, and your token has no push access to it, so employer and client repos you can write to drop out automatically.
+
+| Parameter | Default | |
+| --- | --- | --- |
+| `limit` | `6` | rows to show, 1–10 |
+| `theme` | `gruvbox` | also `dark`, `default` |
+| `show_open` | `true` | `false` lists merged PRs only |
+| `hide_border` | `false` | |
+
+Closed-unmerged PRs are never shown. The subtitle counts merged PRs and projects among your 100 most recent PRs.
+
+### `/views`: profile view counter
+
+A drop-in for `komarev.com/ghpvc` with `label` and `color` (named shields color or hex). Every request increments the count, and the response is never cached, so camo refetches on each profile view. The count lives in the `views-data` volume; `INITIAL_VIEWS` seeds it on first start only.
 
 ```md
 ![Stats](https://stats.fusan.me/api?username=FuSan21&theme=gruvbox&show_icons=true)
 ![Top languages](https://stats.fusan.me/api/top-langs?username=FuSan21&layout=compact&theme=gruvbox)
 ![Streak](https://stats.fusan.me/streak?user=FuSan21&theme=gruvbox&hide_border=true)
 ![Activity graph](https://stats.fusan.me/graph?username=FuSan21&theme=gruvbox)
+![Open source](https://stats.fusan.me/oss?username=FuSan21&theme=gruvbox)
+![Views](https://stats.fusan.me/views?username=FuSan21)
 ```
 
 ## Why the gateway exists

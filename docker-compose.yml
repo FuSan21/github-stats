@@ -10,6 +10,7 @@ services:
       - readme-stats
       - streak
       - activity-graph
+      - extras
     environment:
       GITHUB_USER: ${GITHUB_USER:?set GITHUB_USER}
       TZ: ${TZ:-Asia/Dhaka}
@@ -55,5 +56,23 @@ services:
     expose:
       - "5100"
 
+  # Our own cards: profile view counter and third-party PRs (extras/server.mjs)
+  extras:
+    build: ./extras
+    restart: unless-stopped
+    environment:
+      GITHUB_USER: ${GITHUB_USER}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      # Only read on first start, when views-data is empty. 1718 was FuSan21's
+      # komarev.com count when this replaced it (2026-10-23).
+      INITIAL_VIEWS: ${INITIAL_VIEWS:-1718}
+      PORT: "7000"
+      TZ: ${TZ:-Asia/Dhaka}
+    volumes:
+      - views-data:/data
+    expose:
+      - "7000"
+
 volumes:
   gateway-cache:
+  views-data:
