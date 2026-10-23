@@ -4,7 +4,7 @@
 
 services:
   gateway:
-    image: nginx:1.29-alpine
+    build: ./gateway
     restart: unless-stopped
     depends_on:
       - readme-stats
@@ -15,7 +15,6 @@ services:
       GITHUB_USER: ${GITHUB_USER:?set GITHUB_USER}
       TZ: ${TZ:-Asia/Dhaka}
     volumes:
-      - ./gateway/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - gateway-cache:/var/cache/nginx
     expose:
       - "80"
