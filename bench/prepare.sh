@@ -2,7 +2,7 @@
 # Assembles bench/out/ for run.sh: both versions' sources, patched so their
 # GitHub base URL can point at fakegh, plus fakegh and load built for the target.
 #
-#   bench/prepare.sh <bun-ref> <go-ref>     e.g. bench/prepare.sh main go-rewrite
+#   bench/prepare.sh <bun-ref> <go-ref>     e.g. bench/prepare.sh bun-typescript main
 #
 # A ref of "." takes cards/ from the working tree instead of git.
 # GOARCH defaults to arm64 (Raspberry Pi 5). Copy bench/out/ to the host and run run.sh.

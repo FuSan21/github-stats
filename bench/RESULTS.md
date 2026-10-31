@@ -2,8 +2,8 @@
 
 The same cards service in two implementations, measured side by side on 2026-10-31:
 
-- **Bun:** TypeScript on Bun 1.4 (`oven/bun:1.4-alpine`), `main` at `ca844da`.
-- **Go:** Go 1.27, a static binary on `scratch`, from the `go-rewrite` branch.
+- **Bun:** TypeScript on Bun 1.4 (`oven/bun:1.4-alpine`), the `bun-typescript` branch (`ca844da`).
+- **Go:** Go 1.27, a static binary on `scratch`, `main` at `68a91a0`.
 
 Both render identical SVGs. 28 of 29 parity cases match byte for byte; the other differs in the last digit of one float.
 
@@ -16,7 +16,7 @@ Both render identical SVGs. 28 of 29 parity cases match byte for byte; the other
 - **CPU:** utime + stime from `/proc/<pid>/stat` over each run.
 - **Load:** 15 s per card at 32 clients and 30 s mixed, each after a 2 s warm-up. A single run, so read differences under about 10 % as noise.
 
-Raw data: [`results-2026-10-31-rpi5.jsonl`](results-2026-10-31-rpi5.jsonl). To reproduce: `bench/prepare.sh main go-rewrite`, copy `bench/out/` to the Pi, run `./run.sh`, then `go run ./report < results.jsonl`.
+Raw data: [`results-2026-10-31-rpi5.jsonl`](results-2026-10-31-rpi5.jsonl). To reproduce: `bench/prepare.sh bun-typescript main`, copy `bench/out/` to the Pi, run `./run.sh`, then `go run ./report < results.jsonl`.
 
 ## Results
 
