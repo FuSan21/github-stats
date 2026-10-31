@@ -1,13 +1,13 @@
 # Self-hosted GitHub profile cards for one user, using that user's own token so
-# private contributions are counted. Dokploy's Traefik routes the domain
-# straight to cards:7000; the service itself only serves GITHUB_USER's cards,
-# caps its GitHub calls, and sets each card's cache lifetime.
+# private contributions are counted. Self-contained: the image is built straight
+# from this repository on GitHub, so this file can be pasted into Dokploy's Raw
+# compose (or run anywhere) without a checkout. Route your domain to cards:7000.
+#
+# Needs GITHUB_USER and GITHUB_TOKEN (see .env.example).
 
 services:
-  # Every card: stats, top languages, streak, activity graph, open source PRs
-  # and the view counter (Go, see cards/).
   cards:
-    build: ./cards
+    build: https://github.com/FuSan21/github-stats.git#main:cards
     restart: unless-stopped
     environment:
       GITHUB_USER: ${GITHUB_USER:?set GITHUB_USER}

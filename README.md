@@ -71,10 +71,14 @@ The streak and graph read the contribution calendar, so they match what your pro
 
 ## Deploy on Dokploy
 
-1. Create a Compose service with source **Git**, pointing at this repository, compose path `./docker-compose.yml`.
+[`docker-compose.yml`](docker-compose.yml) is self-contained: the image builds straight from this repository on GitHub, so no checkout is needed.
+
+1. Create a Compose service with source **Raw** and paste in `docker-compose.yml`.
 2. Environment: `GITHUB_USER`, `GITHUB_TOKEN`, `TZ` (see `.env.example`).
 3. Domain: `stats.fusan.me` on service `cards`, port `7000`, HTTPS with Let's Encrypt.
 4. Deploy. Check `https://stats.fusan.me/healthz`.
+
+Each deploy rebuilds from `main`, so pushing a change and redeploying is enough.
 
 ## Run locally
 
@@ -83,6 +87,7 @@ cp .env.example .env   # fill in GITHUB_TOKEN
 docker compose -f docker-compose.yml -f - up -d --build <<'EOF'
 services:
   cards:
+    build: ./cards        # your checkout instead of GitHub's main
     ports: ["8089:7000"]
 EOF
 curl "localhost:8089/api?username=FuSan21"
