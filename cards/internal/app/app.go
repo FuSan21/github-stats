@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,6 +103,7 @@ func (a *App) routes() map[string]route {
 func svg(w http.ResponseWriter, status int, cache, body string) {
 	w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")
 	w.Header().Set("Cache-Control", cache)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(body))
 }
@@ -115,7 +117,15 @@ func (a *App) Handler() http.Handler {
 			_, _ = w.Write([]byte("ok\n"))
 			return
 		}
-		p := render.NewParams(r.URL.Query())
+		q := r.URL.Query()
+		// Years outside GitHub's lifetime would only mint new data cache keys
+		// (and GitHub calls); drop them so the card falls back to its default.
+		for name, first := range map[string]int{"commits_year": 2008, "starting_year": 2005} {
+			if y, err := strconv.Atoi(q.Get(name)); q.Has(name) && (err != nil || y < first || y > a.Now().Year()) {
+				q.Del(name)
+			}
+		}
+		p := render.NewParams(q)
 		rt, ok := routes[r.URL.Path]
 		isViews := r.URL.Path == "/views"
 		if !ok && !isViews {

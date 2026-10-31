@@ -13,7 +13,7 @@ The service runs with the profile owner's own token, so private repositories and
 
 ## Endpoints
 
-Everything goes through the `gateway` (nginx) to the `cards` service. Query parameters are the upstream ones, English only (no `locale`).
+Dokploy’s Traefik routes the domain straight to the `cards` service. Query parameters are the upstream ones, English only (no `locale`).
 
 | Path | Card | Required parameter |
 | --- | --- | --- |
@@ -23,11 +23,11 @@ Everything goes through the `gateway` (nginx) to the `cards` service. Query para
 | `/graph` | activity graph | `username` |
 | `/oss` | third-party PRs card | `username` |
 | `/views` | profile view counter | `username` |
-| `/healthz` | gateway health | none |
+| `/healthz` | service health | none |
 
 ### `/oss`: open source contributions
 
-Lists your pull requests to other people's public repositories, newest first, refreshed from the GitHub API at most every 15 minutes (plus the gateway's 1 hour cache). A repository counts as third-party when it's public, not owned by you, and your token has no push access to it, so employer and client repos you can write to drop out automatically.
+Lists your pull requests to other people's public repositories, newest first, refreshed from the GitHub API at most every 15 minutes. A repository counts as third-party when it's public, not owned by you, and your token has no push access to it, so employer and client repos you can write to drop out automatically.
 
 | Parameter | Default | |
 | --- | --- | --- |
@@ -51,15 +51,16 @@ A drop-in for `komarev.com/ghpvc` with `label` and `color` (named shields color 
 ![Views](https://stats.fusan.me/views?username=FuSan21)
 ```
 
-## Why the gateway exists
+## Protections
 
-The token can see private repositories, so `cards` is never reachable directly:
+The token can see private repositories and has a quota, so the service guards both itself:
 
-- **Single user.** Any other username gets `403`, so nobody else can spend the token's quota. Enforced in nginx and again in `cards`.
-- **Aggregate cards only.** The upstream routes that would expose a single private repository or raw data (`/api/pin`, `/api/gist`, `/api/wakatime`, the graph's `/data`) are not implemented, and nginx returns `404` for any other path.
-- **Caching.** nginx caches successful cards for 1 hour and serves the last good one if `cards` errors. Underneath, `cards` keeps GitHub data for 15 minutes, shared across themes and layouts, and keeps serving it if a refresh fails. One client is limited to 5 req/s (burst 40).
+- **Single user.** Any other username gets `403`, so nobody else can spend the token's quota.
+- **Aggregate cards only.** The upstream routes that would expose a single private repository or raw data (`/api/pin`, `/api/gist`, `/api/wakatime`, the graph's `/data`) are not implemented; any other path is `404`.
+- **GitHub call budget.** At most 100 GitHub calls in a burst, refilling one every 12 seconds (about 400 an hour, against GitHub's 5,000). Over budget, cards that need fresh data get a `503` error card; cached cards keep working. `commits_year` and `starting_year` outside GitHub's lifetime are ignored, so they can't mint new cache keys.
+- **Caching.** GitHub data is kept for 15 minutes, shared across themes and layouts, and the last good data keeps being served if a refresh fails. Cards are sent with `Cache-Control: public, max-age=3600`, which GitHub's image proxy (camo) honours; `/views` is never cached.
 
-Errors are sent with a non-`200` status (`403` user not allowed, `502` GitHub unreachable or token rejected), so they are never cached. Check the `cards` logs for the underlying GitHub error.
+Errors are sent with a non-`200` status (`403` user not allowed, `502` GitHub unreachable or token rejected, `503` over the call budget) and `no-store`, so they are never cached. Check the `cards` logs for the underlying GitHub error.
 
 ## Token
 
@@ -71,7 +72,7 @@ The streak and graph read the contribution calendar, so they match what your pro
 
 1. Create a Compose service with source **Git**, pointing at this repository, compose path `./docker-compose.yml`.
 2. Environment: `GITHUB_USER`, `GITHUB_TOKEN`, `TZ` (see `.env.example`).
-3. Domain: `stats.fusan.me` on service `gateway`, port `80`, HTTPS with Let's Encrypt.
+3. Domain: `stats.fusan.me` on service `cards`, port `7000`, HTTPS with Let's Encrypt.
 4. Deploy. Check `https://stats.fusan.me/healthz`.
 
 ## Run locally
@@ -80,8 +81,8 @@ The streak and graph read the contribution calendar, so they match what your pro
 cp .env.example .env   # fill in GITHUB_TOKEN
 docker compose -f docker-compose.yml -f - up -d --build <<'EOF'
 services:
-  gateway:
-    ports: ["8089:80"]
+  cards:
+    ports: ["8089:7000"]
 EOF
 curl "localhost:8089/api?username=FuSan21"
 ```

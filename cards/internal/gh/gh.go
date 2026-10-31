@@ -1,6 +1,6 @@
-// Package gh is a small GitHub API client with an in-memory data cache. The
-// gateway caches rendered cards per URL; this caches the data underneath, so
-// different themes or layouts of the same card cost one API call.
+// Package gh is a small GitHub API client with an in-memory data cache, so
+// different themes or layouts of the same card cost one API call, and a call
+// budget that caps how much of the token's quota the cards can spend.
 package gh
 
 import (
@@ -28,13 +28,28 @@ type Client struct {
 	BaseURL string // https://api.github.com
 	Token   string
 	HTTP    *http.Client
+	// Budget caps GitHub calls, however many clients ask: some parameters
+	// (commits_year, the graph's from/to) create new cache keys, so without
+	// it a client could spend the token's quota by varying them.
+	Budget *Bucket
 }
 
+// New allows bursts of 100 GitHub calls, refilling one every 12 s: at most
+// about 400 an hour, well under GitHub's 5,000.
 func New(token string) *Client {
-	return &Client{BaseURL: "https://api.github.com", Token: token, HTTP: &http.Client{Timeout: 20 * time.Second}}
+	return &Client{
+		BaseURL: "https://api.github.com",
+		Token:   token,
+		HTTP:    &http.Client{Timeout: 20 * time.Second},
+		Budget:  NewBucket(100, 12*time.Second),
+	}
 }
 
 func (c *Client) do(req *http.Request) (*http.Response, []byte, error) {
+	if c.Budget != nil && !c.Budget.Take() {
+		log.Printf("github call budget used up, refusing %s", req.URL.Path)
+		return nil, nil, errorf(http.StatusServiceUnavailable, "Too many card requests, try again shortly")
+	}
 	req.Header.Set("Authorization", "bearer "+c.Token)
 	req.Header.Set("User-Agent", "github-stats-cards")
 	res, err := c.HTTP.Do(req)

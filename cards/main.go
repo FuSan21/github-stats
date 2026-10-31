@@ -4,7 +4,8 @@
 //	/api/top-langs  top languages           /oss    PRs to other people's projects
 //	/streak         contribution streak     /views  profile view counter
 //
-// The nginx gateway in front caches responses and enforces the single user too.
+// Dokploy's Traefik routes the domain straight here; cards carry their own
+// Cache-Control, and GitHub's image proxy caches them for an hour.
 package main
 
 import (

@@ -351,3 +351,44 @@ func TestCache(t *testing.T) {
 		t.Error("panic not turned into an error")
 	}
 }
+
+func TestGitHubBudget(t *testing.T) {
+	a, fake := setup(t)
+	a.GitHub.Budget = gh.NewBucket(2, time.Hour)
+	// The stats card needs two calls (two pages of repos); the next new cache key finds the budget empty.
+	if status, _, _ := get(t, a, "/api?username=FuSan21"); status != 200 {
+		t.Fatalf("first card: %d", status)
+	}
+	status, h, body := get(t, a, "/api?username=FuSan21&commits_year=2025")
+	if status != 503 || h.Get("Cache-Control") != "no-store" || !strings.Contains(body, "Too many card requests") {
+		t.Errorf("over budget: %d %q", status, h.Get("Cache-Control"))
+	}
+	if fake.calls.Load() != 2 {
+		t.Errorf("GitHub calls = %d, want 2", fake.calls.Load())
+	}
+	// Cached data is still served without spending budget.
+	if status, _, _ := get(t, a, "/api?username=FuSan21&theme=dark"); status != 200 {
+		t.Errorf("cached card: %d", status)
+	}
+}
+
+func TestYearParamsAreClamped(t *testing.T) {
+	a, fake := setup(t)
+	get(t, a, "/api?username=FuSan21")
+	calls := fake.calls.Load()
+	for _, y := range []string{"1999", "3000", "abc", "-5"} {
+		_, _, body := get(t, a, "/api?username=FuSan21&commits_year="+y)
+		if !strings.Contains(body, "Total Commits (last year)") {
+			t.Errorf("commits_year=%s not dropped", y)
+		}
+	}
+	if fake.calls.Load() != calls {
+		t.Errorf("invalid years made %d GitHub calls", fake.calls.Load()-calls)
+	}
+	if _, _, body := get(t, a, "/api?username=FuSan21&commits_year=2025"); !strings.Contains(body, "Total Commits (2025)") {
+		t.Error("a valid commits_year was dropped")
+	}
+	if _, h, _ := get(t, a, "/oss?username=FuSan21"); h.Get("X-Content-Type-Options") != "nosniff" {
+		t.Error("nosniff header missing")
+	}
+}
