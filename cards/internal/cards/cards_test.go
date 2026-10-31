@@ -295,3 +295,80 @@ func TestGraphCard(t *testing.T) {
 	contains(t, untitled, "<title>FuSan21&#39;s contribution graph</title>")
 	lacks(t, untitled, `class="ct-grid"`, `class="header"`)
 }
+
+func ossFixture() []PR {
+	var prs []PR
+	for i, state := range []string{"MERGED", "OPEN", "MERGED", "MERGED", "OPEN"} {
+		pr := PR{Title: "A fairly long pull request title number " + strconv.Itoa(i) + " that needs truncating somewhere", State: state}
+		pr.Repository = &struct {
+			NameWithOwner    string  `json:"nameWithOwner"`
+			IsPrivate        bool    `json:"isPrivate"`
+			StargazerCount   int     `json:"stargazerCount"`
+			ViewerPermission *string `json:"viewerPermission"`
+			Owner            struct {
+				Login string `json:"login"`
+			} `json:"owner"`
+		}{NameWithOwner: "some-org/project-" + strconv.Itoa(i), StargazerCount: 1000 * i}
+		prs = append(prs, pr)
+	}
+	return prs
+}
+
+func TestOSSCardWide(t *testing.T) {
+	narrow := wellFormed(t, RenderOSS(ossFixture(), params(t, "theme=gruvbox"), "FuSan21"))
+	contains(t, narrow, `width="495"`, `translate(25, 124)`) // one column: row 2 below row 1
+	wide := wellFormed(t, RenderOSS(ossFixture(), params(t, "theme=gruvbox&card_width=990"), "FuSan21"))
+	// Two 455 px columns: PR 2 sits right of PR 1, PR 3 starts the second row.
+	contains(t, wide, `width="990"`, `translate(25, 78)`, `translate(510, 78)`, `translate(25, 124)`, `x="455" y="1" text-anchor="end"`)
+	if strings.Count(wide, "translate(") > strings.Count(narrow, "translate(") {
+		t.Error("wide layout drew extra rows")
+	}
+	if h := regexp.MustCompile(`height="(\d+)"`).FindStringSubmatch(wide)[1]; h != "226" { // 3 rows instead of 5
+		t.Errorf("wide height = %s, want 226", h)
+	}
+	contains(t, wellFormed(t, RenderOSS(ossFixture(), params(t, "card_width=5000"), "FuSan21")), `width="1200"`)
+	contains(t, wellFormed(t, RenderOSS(ossFixture(), params(t, "card_width=10"), "FuSan21")), `width="495"`)
+}
+
+// ossPRs builds PRs newest first from "state repo" pairs.
+func ossPRs(specs ...string) []PR {
+	var prs []PR
+	for i, s := range specs {
+		state, repo, _ := strings.Cut(s, " ")
+		pr := ossFixture()[0]
+		pr.Title, pr.State = "PR "+strconv.Itoa(i), state
+		r := *pr.Repository
+		r.NameWithOwner = repo
+		pr.Repository = &r
+		prs = append(prs, pr)
+	}
+	return prs
+}
+
+func TestOSSGroupsByRepo(t *testing.T) {
+	prs := ossPRs("OPEN a/x", "MERGED b/y", "MERGED a/x", "MERGED a/x", "OPEN a/x", "CLOSED a/x", "MERGED c/z")
+	svg := wellFormed(t, RenderOSS(prs, params(t, ""), "FuSan21"))
+	// a/x shows its newest PR (PR 0, open), with the rest summarised; the closed one isn't counted.
+	contains(t, svg, ">PR 0<", ">+2 merged, +1 open<", ">PR 1<", ">PR 6<")
+	lacks(t, svg, ">PR 2<", ">PR 3<", ">PR 4<", ">PR 5<")
+	if n := strings.Count(svg, `class="repo"`); n != 3 {
+		t.Errorf("entries = %d, want 3 (one per repo)", n)
+	}
+	// Rows: a/x is 46+18 tall, so b/y starts at 78+64.
+	contains(t, svg, `translate(25, 78)`, `translate(25, 142)`, `translate(25, 188)`)
+	contains(t, svg, "4 merged PRs across 3 projects")
+
+	// limit counts repos, not PRs.
+	if n := strings.Count(RenderOSS(prs, params(t, "limit=2"), "FuSan21"), `class="repo"`); n != 2 {
+		t.Errorf("limit=2 showed %d entries", n)
+	}
+
+	// show_open=false: a/x's newest shown PR is PR 2, and open ones aren't counted.
+	merged := wellFormed(t, RenderOSS(prs, params(t, "show_open=false"), "FuSan21"))
+	contains(t, merged, ">PR 2<", ">+1 merged<")
+	lacks(t, merged, "open<", ">PR 0<")
+
+	// Two columns: a grid row is as tall as its tallest entry.
+	wide := wellFormed(t, RenderOSS(prs, params(t, "card_width=990"), "FuSan21"))
+	contains(t, wide, `translate(25, 78)`, `translate(510, 78)`, `translate(25, 142)`)
+}

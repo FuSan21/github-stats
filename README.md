@@ -27,14 +27,15 @@ Dokploy’s Traefik routes the domain straight to the `cards` service. Query par
 
 ### `/oss`: open source contributions
 
-Lists your pull requests to other people's public repositories, newest first, refreshed from the GitHub API at most every 15 minutes. A repository counts as third-party when it's public, not owned by you, and your token has no push access to it, so employer and client repos you can write to drop out automatically.
+Lists your pull requests to other people's public repositories, refreshed from the GitHub API at most every 15 minutes. Each repository appears once, newest first, showing its latest PR; its other PRs are summarised on a line below, like `+2 merged, +1 open`. A repository counts as third-party when it's public, not owned by you, and your token has no push access to it, so employer and client repos you can write to drop out automatically.
 
 | Parameter | Default | |
 | --- | --- | --- |
-| `limit` | `6` | rows to show, 1–10 |
+| `limit` | `6` | repositories to show, 1–10 |
 | `theme` | `gruvbox` | also `dark`, `default` |
 | `show_open` | `true` | `false` lists merged PRs only |
 | `hide_border` | `false` | |
+| `card_width` | `495` | up to 1200; from 900 the PRs are laid out in two columns, so `990` fills a README row like the activity graph |
 
 Closed-unmerged PRs are never shown. The subtitle counts merged PRs and projects among your 100 most recent PRs.
 

@@ -66,6 +66,9 @@ func FetchOSSPRs(ctx context.Context, c *gh.Client, cache *gh.Cache, login strin
 	})
 }
 
+// ossWidth is the default card width, matching the readme-stats cards.
+const ossWidth = 495
+
 type ossTheme struct{ bg, border, title, text, muted, repo, merged, open string }
 
 var ossThemes = map[string]ossTheme{
@@ -98,42 +101,100 @@ func RenderOSS(prs []PR, p Params, user string) string {
 		borderOpacity = 0
 	}
 
-	var shown []PR
+	// One entry per repository, for its newest shown PR; the repository's other
+	// shown PRs are summarised on a third line ("+2 merged, +1 open").
+	type entry struct {
+		pr                   PR
+		moreMerged, moreOpen int
+	}
+	var shown []*entry
+	byRepo := map[string]*entry{}
 	projects := map[string]bool{}
 	merged := 0
 	for _, pr := range prs {
+		repo := pr.Repository.NameWithOwner
 		if pr.State == "MERGED" {
 			merged++
-			projects[pr.Repository.NameWithOwner] = true
+			projects[repo] = true
 		}
-		if (pr.State == "MERGED" || (showOpen && pr.State == "OPEN")) && len(shown) < limit {
-			shown = append(shown, pr)
+		if pr.State != "MERGED" && !(showOpen && pr.State == "OPEN") {
+			continue
+		}
+		if e := byRepo[repo]; e != nil {
+			if pr.State == "MERGED" {
+				e.moreMerged++
+			} else {
+				e.moreOpen++
+			}
+			continue
+		}
+		e := &entry{pr: pr}
+		byRepo[repo] = e
+		if len(shown) < limit {
+			shown = append(shown, e)
 		}
 	}
 
-	const W, rowH, top = 495, 46, 78
-	H := top + max(len(shown), 1)*rowH + 10
+	// card_width >= 900 lays the entries out in two columns, newest first, left
+	// to right. That suits a README row of its own, where GitHub scales the card
+	// down to the column width, like the activity graph.
+	W := Clamp(p.IntOr("card_width", ossWidth), ossWidth, 1200)
+	cols := 1
+	if W >= 900 {
+		cols = 2
+	}
+	const rowH, moreH, top, pad, gap = 46, 18, 78, 25, 30
+	colW := (W - 2*pad - gap*(cols-1)) / cols
+	// Truncation lengths fit the default 445 px column; scale them with the column.
+	repoMax, titleMax := 42*colW/445, 58*colW/445
+	more := func(e *entry) string {
+		var parts []string
+		if e.moreMerged > 0 {
+			parts = append(parts, fmt.Sprintf("+%d merged", e.moreMerged))
+		}
+		if e.moreOpen > 0 {
+			parts = append(parts, fmt.Sprintf("+%d open", e.moreOpen))
+		}
+		return strings.Join(parts, ", ")
+	}
 	var rows strings.Builder
-	for i, pr := range shown {
+	y := top
+	for i, e := range shown {
+		pr := e.pr
 		color, label := t.open, "Open"
 		if pr.State == "MERGED" {
 			color, label = t.merged, "Merged"
 		}
 		stars := ""
 		if n := pr.Repository.StargazerCount; n > 0 {
-			stars = fmt.Sprintf(`<text x="445" y="1" text-anchor="end" class="muted">★ %s</text>`, Thousands(n))
+			stars = fmt.Sprintf(`<text x="%d" y="1" text-anchor="end" class="muted">★ %s</text>`, colW, Thousands(n))
+		}
+		extra := ""
+		if m := more(e); m != "" {
+			extra = fmt.Sprintf("\n  <text x=\"62\" y=\"38\" class=\"more\">%s</text>", m)
 		}
 		if i > 0 {
 			rows.WriteString("\n")
 		}
-		fmt.Fprintf(&rows, `<g transform="translate(25, %d)">
+		fmt.Fprintf(&rows, `<g transform="translate(%d, %d)">
   <rect x="0" y="-11" width="52" height="16" rx="8" fill="none" stroke="%s"/>
-  <text x="26" y="1" text-anchor="middle" class="pill" fill="%[2]s">%s</text>
+  <text x="26" y="1" text-anchor="middle" class="pill" fill="%[3]s">%s</text>
   <text x="62" y="1" class="repo">%s</text>
   %s
-  <text x="62" y="20" class="pr">%s</text>
-</g>`, top+i*rowH, color, label, Esc(Truncate(pr.Repository.NameWithOwner, 42)), stars, Esc(Truncate(pr.Title, 58)))
+  <text x="62" y="20" class="pr">%s</text>%s
+</g>`, pad+(i%cols)*(colW+gap), y, color, label, Esc(Truncate(pr.Repository.NameWithOwner, repoMax)), stars, Esc(Truncate(pr.Title, titleMax)), extra)
+		// A grid row is as tall as its tallest entry, so the columns stay aligned.
+		if i%cols == cols-1 || i == len(shown)-1 {
+			h := rowH
+			for _, other := range shown[i-i%cols : i+1] {
+				if more(other) != "" {
+					h = rowH + moreH
+				}
+			}
+			y += h
+		}
 	}
+	H := max(y, top+rowH) + 10
 	if len(shown) == 0 {
 		fmt.Fprintf(&rows, `<text x="25" y="%d" class="muted">No public contributions yet.</text>`, top)
 	}
@@ -147,6 +208,7 @@ func RenderOSS(prs []PR, p Params, user string) string {
   .pr { font: 400 12px 'Segoe UI', Ubuntu, sans-serif; fill: %[7]s; }
   .muted { font: 400 12px 'Segoe UI', Ubuntu, sans-serif; fill: %[5]s; }
   .pill { font: 600 10px 'Segoe UI', Ubuntu, sans-serif; }
+  .more { font: 400 11px 'Segoe UI', Ubuntu, sans-serif; fill: %[5]s; }
 </style>
 <rect x="0.5" y="0.5" width="%[8]d" height="%[9]d" rx="4.5" fill="%[10]s" stroke="%[11]s" stroke-opacity="%[12]d"/>
 <text x="25" y="35" class="title">Open Source Contributions</text>
