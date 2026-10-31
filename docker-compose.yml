@@ -17,7 +17,7 @@ services:
       - "80"
 
   # Every card: stats, top languages, streak, activity graph, open source PRs
-  # and the view counter (TypeScript on Bun, see cards/).
+  # and the view counter (Go, see cards/).
   cards:
     build: ./cards
     restart: unless-stopped

@@ -1,6 +1,6 @@
 # github-stats
 
-Self-hosted GitHub profile cards for a single user, deployed on Dokploy. One TypeScript service on [Bun](https://bun.sh) (`cards/`) renders every card with no runtime dependencies. It reimplements these public instances, keeping their query parameters and look:
+Self-hosted GitHub profile cards for a single user, deployed on Dokploy. One Go service (`cards/`) renders every card, using only the standard library. It reimplements these public instances, keeping their query parameters and look:
 
 | Card | Reimplements |
 | --- | --- |
@@ -90,18 +90,21 @@ curl "localhost:8089/api?username=FuSan21"
 
 ```sh
 cd cards
-bun install          # dev tooling only: TypeScript and Bun types
-bun test             # against a fake GitHub API, no token needed
-bun run typecheck
-GITHUB_USER=FuSan21 GITHUB_TOKEN=... VIEWS_FILE=./views.json bun src/server.ts
+go test -race ./...  # against a fake GitHub API, no token needed
+go vet ./...
+GITHUB_USER=FuSan21 GITHUB_TOKEN=... VIEWS_FILE=./views.json go run .
 ```
+
+Standard library only, no third-party modules. The image is a static binary on `scratch`; zone data (`time/tzdata`) and the themes (`embed`) are compiled in.
 
 Layout:
 
-- `src/server.ts` starts the server. `src/app.ts` routes each path to a card and enforces the single user.
-- `src/cards/*.ts` has one file per card, each with its GitHub query and its SVG renderer.
-- `src/lib/` holds the shared pieces: the GitHub client and data cache, query parameters, SVG helpers, and the readme-stats card frame.
-- `src/themes/*.json` holds each upstream project's theme table: 62 readme-stats, 166 streak and 38 graph themes.
+- `main.go` starts the server and flushes the view count every 5 seconds and on shutdown.
+- `internal/app` routes each path to a card and enforces the single user.
+- `internal/cards` has one file per card, each with its GitHub query and its SVG renderer, plus `frame.go` for the readme-stats card frame and colours.
+- `internal/cards/themes/*.json` holds each upstream project's theme table: 62 readme-stats, 166 streak and 38 graph themes.
+- `internal/gh` is the GitHub client and data cache. `internal/render` holds query parameters and SVG helpers.
+- `bench/` benchmarks two builds side by side; see [Benchmarks](#benchmarks).
 
 ### Differences from upstream
 
@@ -110,3 +113,7 @@ Layout:
 - **The activity graph is plain SVG.** It is drawn directly as a monotone curve, where upstream rendered it with Chartist in jsdom. The title is an SVG `<text>` rather than an HTML `foreignObject`.
 - **The streak card's `date_format` takes PHP `date()` letters.** Only `d j D l m n M F y Y` are supported, and `[...]` hides a part in the current year.
 - **Colour parameters must be hex** (or a CSS colour name on the streak card). Anything else falls back to the theme colour, so a parameter can't inject markup.
+
+## Benchmarks
+
+`bench/` runs two builds side by side against a fake GitHub API and measures image size, memory, startup, and throughput and latency per card. [`bench/RESULTS.md`](bench/RESULTS.md) has the Bun vs Go comparison on a Raspberry Pi 5. In short, Go uses 4–6× less memory (9 MiB idle against 42 MiB), its image is 15× smaller (8 MB against 115 MB), and it serves up to 1.6× more requests by using both cores. Bun builds about 15 s faster and has slightly lower tail latency under heavy load.
