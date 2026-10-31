@@ -7,10 +7,7 @@ services:
     build: ./gateway
     restart: unless-stopped
     depends_on:
-      - readme-stats
-      - streak
-      - activity-graph
-      - extras
+      - cards
     environment:
       GITHUB_USER: ${GITHUB_USER:?set GITHUB_USER}
       TZ: ${TZ:-Asia/Dhaka}
@@ -19,51 +16,16 @@ services:
     expose:
       - "80"
 
-  # anuraghazra/github-readme-stats: stats card + top languages
-  readme-stats:
-    build: ./readme-stats
-    restart: unless-stopped
-    environment:
-      PAT_1: ${GITHUB_TOKEN:?set GITHUB_TOKEN}
-      WHITELIST: ${GITHUB_USER}
-      PORT: "9000"
-      NODE_ENV: production
-      TZ: ${TZ:-Asia/Dhaka}
-    expose:
-      - "9000"
-
-  # DenverCoder1/github-readme-streak-stats: built from its own Dockerfile
-  streak:
-    build:
-      context: https://github.com/DenverCoder1/github-readme-streak-stats.git#ae11d329c3320706e9b9b88aeb143a627ecd7d0c
-    restart: unless-stopped
-    environment:
-      TOKEN: ${GITHUB_TOKEN}
-      WHITELIST: ${GITHUB_USER}
-      TZ: ${TZ:-Asia/Dhaka}
-    expose:
-      - "80"
-
-  # Ashutosh00710/github-readme-activity-graph: contribution line graph
-  activity-graph:
-    build: ./activity-graph
-    restart: unless-stopped
-    environment:
-      TOKEN: ${GITHUB_TOKEN}
-      PORT: "5100"
-      TZ: ${TZ:-Asia/Dhaka}
-    expose:
-      - "5100"
-
-  # Our own cards: profile view counter and third-party PRs (extras/server.mjs)
-  extras:
-    build: ./extras
+  # Every card: stats, top languages, streak, activity graph, open source PRs
+  # and the view counter (TypeScript on Bun, see cards/).
+  cards:
+    build: ./cards
     restart: unless-stopped
     environment:
       GITHUB_USER: ${GITHUB_USER}
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?set GITHUB_TOKEN}
       # Only read on first start, when views-data is empty. 1718 was FuSan21's
-      # komarev.com count when this replaced it (2026-10-23).
+      # komarev.com count when the counter replaced it (2026-10-23).
       INITIAL_VIEWS: ${INITIAL_VIEWS:-1718}
       PORT: "7000"
       TZ: ${TZ:-Asia/Dhaka}

@@ -1,27 +1,28 @@
 # github-stats
 
-Self-hosted GitHub profile cards for a single user, deployed on Dokploy. It replaces the public instances of:
+Self-hosted GitHub profile cards for a single user, deployed on Dokploy. One TypeScript service on [Bun](https://bun.sh) (`cards/`) renders every card with no runtime dependencies. It reimplements these public instances, keeping their query parameters and look:
 
-| Card | Upstream | Pinned commit |
-| --- | --- | --- |
-| Stats, top languages | [anuraghazra/github-readme-stats](https://github.com/anuraghazra/github-readme-stats) | `54a7985` |
-| Streak | [DenverCoder1/github-readme-streak-stats](https://github.com/DenverCoder1/github-readme-streak-stats) | `ae11d32` |
-| Activity graph | [Ashutosh00710/github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph) | `0962e94` |
+| Card | Reimplements |
+| --- | --- |
+| Stats, top languages | [anuraghazra/github-readme-stats](https://github.com/anuraghazra/github-readme-stats) |
+| Streak | [DenverCoder1/github-readme-streak-stats](https://github.com/DenverCoder1/github-readme-streak-stats) |
+| Activity graph | [Ashutosh00710/github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph) |
+| Profile views | [komarev.com/ghpvc](https://github.com/antonkomarev/github-profile-views-counter) |
 
-The apps run with the profile owner's own token, so private repositories and private contributions are counted. Only aggregate numbers show up on the cards; no private repository names do.
+The service runs with the profile owner's own token, so private repositories and private contributions are counted. Only aggregate numbers show up on the cards; no private repository names do.
 
 ## Endpoints
 
-Everything goes through the `gateway` (nginx). Query parameters are the upstream ones.
+Everything goes through the `gateway` (nginx) to the `cards` service. Query parameters are the upstream ones, English only (no `locale`).
 
-| Path | Upstream route | Required parameter |
+| Path | Card | Required parameter |
 | --- | --- | --- |
 | `/api` | stats card | `username` |
 | `/api/top-langs` | top languages | `username` |
 | `/streak` | streak card | `user` |
 | `/graph` | activity graph | `username` |
-| `/oss` | third-party PRs card (`extras`) | `username` |
-| `/views` | profile view counter (`extras`) | `username` |
+| `/oss` | third-party PRs card | `username` |
+| `/views` | profile view counter | `username` |
 | `/healthz` | gateway health | none |
 
 ### `/oss`: open source contributions
@@ -52,13 +53,13 @@ A drop-in for `komarev.com/ghpvc` with `label` and `color` (named shields color 
 
 ## Why the gateway exists
 
-The token can see private repositories, so the upstream apps must not be reachable directly:
+The token can see private repositories, so `cards` is never reachable directly:
 
-- **Single user.** Any other username gets `403`, so nobody else can spend the token's quota. This is enforced in nginx for all three apps; readme-stats and streak also get `WHITELIST`.
-- **Aggregate cards only.** `/api/pin` would render any private repository's name, description and stars, and `/data` returns raw daily counts. They (along with `/api/gist`, `/api/wakatime` and the streak `/demo`) return `404`.
-- **Caching.** Successful responses are cached for 1 hour and served stale if GitHub errors. One client is limited to 5 req/s (burst 40).
+- **Single user.** Any other username gets `403`, so nobody else can spend the token's quota. Enforced in nginx and again in `cards`.
+- **Aggregate cards only.** The upstream routes that would expose a single private repository or raw data (`/api/pin`, `/api/gist`, `/api/wakatime`, the graph's `/data`) are not implemented, and nginx returns `404` for any other path.
+- **Caching.** nginx caches successful cards for 1 hour and serves the last good one if `cards` errors. Underneath, `cards` keeps GitHub data for 15 minutes, shared across themes and layouts, and keeps serving it if a refresh fails. One client is limited to 5 req/s (burst 40).
 
-The upstream apps return their error cards as `200`, so a bad token gets cached for up to an hour. After fixing the token, redeploy with the `gateway-cache` volume cleared.
+Errors are sent with a non-`200` status (`403` user not allowed, `502` GitHub unreachable or token rejected), so they are never cached. Check the `cards` logs for the underlying GitHub error.
 
 ## Token
 
@@ -85,6 +86,27 @@ EOF
 curl "localhost:8089/api?username=FuSan21"
 ```
 
-## Updating upstream
+## Development
 
-Bump the commit in `readme-stats/Dockerfile`, `activity-graph/Dockerfile` or the `streak` build context in `docker-compose.yml`, then redeploy.
+```sh
+cd cards
+bun install          # dev tooling only: TypeScript and Bun types
+bun test             # against a fake GitHub API, no token needed
+bun run typecheck
+GITHUB_USER=FuSan21 GITHUB_TOKEN=... VIEWS_FILE=./views.json bun src/server.ts
+```
+
+Layout:
+
+- `src/server.ts` starts the server. `src/app.ts` routes each path to a card and enforces the single user.
+- `src/cards/*.ts` has one file per card, each with its GitHub query and its SVG renderer.
+- `src/lib/` holds the shared pieces: the GitHub client and data cache, query parameters, SVG helpers, and the readme-stats card frame.
+- `src/themes/*.json` holds each upstream project's theme table: 62 readme-stats, 166 streak and 38 graph themes.
+
+### Differences from upstream
+
+- **No `locale`.** All text is English.
+- **Every page of repositories is read.** The top-languages card reads all of them, not just the first 100, and the stats card keeps paging while repositories have stars. With one user, the token has quota to spare.
+- **The activity graph is plain SVG.** It is drawn directly as a monotone curve, where upstream rendered it with Chartist in jsdom. The title is an SVG `<text>` rather than an HTML `foreignObject`.
+- **The streak card's `date_format` takes PHP `date()` letters.** Only `d j D l m n M F y Y` are supported, and `[...]` hides a part in the current year.
+- **Colour parameters must be hex** (or a CSS colour name on the streak card). Anything else falls back to the theme colour, so a parameter can't inject markup.

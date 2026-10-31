@@ -1,8 +1,7 @@
 # Rendered by the nginx image's envsubst step; only ${GITHUB_USER} is substituted.
 #
-# The upstream apps run with the owner's token, so they can see private repos.
-# Only the aggregate cards are routed; endpoints that render a single repo or
-# raw data (/api/pin, /api/gist, /api/wakatime, /data) are never reachable.
+# The cards app runs with the owner's token, so it can see private repos. It only
+# implements aggregate cards, and only these routes are passed through to it.
 
 proxy_cache_path /var/cache/nginx/cards levels=1:2 keys_zone=cards:10m
                  max_size=200m inactive=7d use_temp_path=off;
@@ -41,8 +40,8 @@ server {
     proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
     proxy_cache_background_update on;
     proxy_cache_lock on;
-    # The apps send their own lifetimes (the activity graph sends no-store);
-    # the gateway decides instead.
+    # The gateway decides cache lifetimes, not the app. Errors are non-200, so
+    # they are never cached, and a GitHub outage serves the last good card.
     proxy_ignore_headers Cache-Control Expires Set-Cookie;
     proxy_hide_header Cache-Control;
     proxy_hide_header Expires;
@@ -53,28 +52,27 @@ server {
 
     location = /api {
         if ($username_ok = 0) { return 403; }
-        proxy_pass http://readme-stats:9000;
+        proxy_pass http://cards:7000;
     }
 
     location = /api/top-langs {
         if ($username_ok = 0) { return 403; }
-        proxy_pass http://readme-stats:9000;
+        proxy_pass http://cards:7000;
     }
 
     location = /streak {
         if ($user_ok = 0) { return 403; }
-        rewrite ^ / break;
-        proxy_pass http://streak:80;
+        proxy_pass http://cards:7000;
     }
 
     location = /graph {
         if ($username_ok = 0) { return 403; }
-        proxy_pass http://activity-graph:5100;
+        proxy_pass http://cards:7000;
     }
 
     location = /oss {
         if ($username_ok = 0) { return 403; }
-        proxy_pass http://extras:7000;
+        proxy_pass http://cards:7000;
     }
 
     # Every hit must reach the counter, and camo must refetch on every view.
@@ -82,7 +80,7 @@ server {
     location = /views {
         if ($username_ok = 0) { return 403; }
         proxy_cache off;
-        proxy_pass http://extras:7000;
+        proxy_pass http://cards:7000;
         add_header Cache-Control "max-age=0, no-cache, no-store, must-revalidate" always;
         add_header X-Content-Type-Options nosniff always;
     }
