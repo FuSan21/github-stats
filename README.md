@@ -1,13 +1,6 @@
 # github-stats
 
-Self-hosted GitHub profile cards for a single user, deployed on Dokploy. One Go service (`cards/`) renders every card, using only the standard library. It reimplements these public instances, keeping their query parameters and look:
-
-| Card | Reimplements |
-| --- | --- |
-| Stats, top languages | [anuraghazra/github-readme-stats](https://github.com/anuraghazra/github-readme-stats) |
-| Streak | [DenverCoder1/github-readme-streak-stats](https://github.com/DenverCoder1/github-readme-streak-stats) |
-| Activity graph | [Ashutosh00710/github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph) |
-| Profile views | [komarev.com/ghpvc](https://github.com/antonkomarev/github-profile-views-counter) |
+Self-hosted GitHub profile cards for a single user, deployed on Dokploy. One Go service (`cards/`) renders every card, using only the standard library.
 
 The service runs with the profile owner's own token, so private repositories and private contributions are counted. Only aggregate numbers show up on the cards; no private repository names do.
 
@@ -124,3 +117,16 @@ Layout:
 ## Benchmarks
 
 `bench/` runs two builds side by side against a fake GitHub API and measures image size, memory, startup, and throughput and latency per card. [`bench/RESULTS.md`](bench/RESULTS.md) has the Bun vs Go comparison on a Raspberry Pi 5. In short, Go uses 4–6× less memory (9 MiB idle against 42 MiB), its image is 15× smaller (8 MB against 115 MB), and it serves up to 1.6× more requests by using both cores. Bun builds about 15 s faster and has slightly lower tail latency under heavy load.
+
+## Credits
+
+Every card is written from scratch, inspired by these projects. Their query parameters and looks were kept, so embeds written for them keep working:
+
+| Card | Inspired by |
+| --- | --- |
+| Stats, top languages | [anuraghazra/github-readme-stats](https://github.com/anuraghazra/github-readme-stats) |
+| Streak | [DenverCoder1/github-readme-streak-stats](https://github.com/DenverCoder1/github-readme-streak-stats) |
+| Activity graph | [Ashutosh00710/github-readme-activity-graph](https://github.com/Ashutosh00710/github-readme-activity-graph) |
+| Profile views | [antonkomarev/github-profile-views-counter](https://github.com/antonkomarev/github-profile-views-counter) |
+
+The theme tables, the stats card's rank formula and the GitHub Octicons come from those projects, with thanks.
